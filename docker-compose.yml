@@ -5,7 +5,8 @@ services:
             dockerfile: docker/php/Dockerfile
         container_name: laravel-app
         volumes:
-            - ./:/var/www
+            - .:/var/www
+            - ./storage:/var/www/storage
         depends_on:
             - db
             - rabbitmq
@@ -49,6 +50,9 @@ services:
             - "15672:15672" # RabbitMQ dashboard
         networks:
             - laravel
+        environment:
+            RABBITMQ_DEFAULT_USER: user
+            RABBITMQ_DEFAULT_PASS: password
 
     adminer:
         image: adminer

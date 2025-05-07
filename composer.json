@@ -10,9 +10,13 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "diswebru/laravel-rabbitmq": "^1.0",
+        "intervention/image": "^3.11",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
-        "laravel/tinker": "^2.10.1"
+        "laravel/tinker": "^2.10.1",
+        "league/flysystem-aws-s3-v3": "^3.0",
+        "vladimir-yuldashev/laravel-queue-rabbitmq": "^14.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
