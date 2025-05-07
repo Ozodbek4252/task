@@ -4,20 +4,21 @@ namespace App\Jobs;
 
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Intervention\Image\Drivers\Gd\Driver;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use App\Services\ImageService;
 use Illuminate\Bus\Queueable;
 use App\Models\Contact;
-
-use Intervention\Image\ImageManager;
-use Intervention\Image\Facades\Image;
 
 class ProcessImageJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public $tries = 3;
+    public $backoff = 10;
+    public $timeout = 180;
 
     protected $tempPath;
     protected $contactId;
@@ -33,45 +34,48 @@ class ProcessImageJob implements ShouldQueue
      */
     public function handle(): void
     {
+        ini_set('memory_limit', '512M');
+
         try {
+            $startTimeToTestLocking = microtime(true); // Start timer
+
             $contact = Contact::find($this->contactId);
-            if (!$contact) return;
+            if (!$contact) {
+                throw new \Exception('Contact not found');
+            }
+
+            // Check if image exists in the temp folder
+            if (!Storage::disk('local')->exists($this->tempPath)) {
+                throw new \Exception('Image not found in temp folder');
+            }
 
             $fullPath = Storage::disk('local')->path($this->tempPath);
 
-            $manager = new ImageManager(new Driver());
-            $image = $manager->read($fullPath);
-
-            // Get original width and height
-            $originalWidth = $image->width();
-            $originalHeight = $image->height();
-
-            // Calculate the new height based on the aspect ratio
-            $newWidth = 300;
-            $newHeight = ($newWidth / $originalWidth) * $originalHeight;
-
-            $image = $image->resize($newWidth, (int) $newHeight, function ($constraint) {
-                $constraint->upsize();
-            })->toWebp();
-            // ->toJpeg();
-
-            // Define S3 path
-            $filename = 'contacts/' . uniqid() . '.webp';
-
-            // Upload to S3
-            Storage::disk('s3')->put($filename, (string) $image);
-
-            if (!Storage::disk('s3')->exists($filename)) {
-                throw new \Exception('Failed to upload image to S3');
-            }
+            $filename = ImageService::resizeAndUpload($fullPath, $this->contactId);
 
             // Update
             $contact->update(['image_path' => $filename]);
 
             // cleanup temp file
             Storage::disk('local')->delete($this->tempPath);
+
+            $endTimeToTestLocking = microtime(true);
+
+            $lockWaitTime = $endTimeToTestLocking - $startTimeToTestLocking; // Time in seconds
+            Log::info("Lock wait time: " . $lockWaitTime . " seconds");
         } catch (\Exception $e) {
             Log::error("Failed to process image: " . $e->getMessage());
+        }
+    }
+
+    public function failed(\Throwable $e)
+    {
+        Log::error("ProcessImageJob failed: " . $e->getMessage());
+
+        // Clean up temp file if it still exists
+        if (Storage::disk('local')->exists($this->tempPath)) {
+            Storage::disk('local')->delete($this->tempPath);
+            Log::info("Temp file deleted after failure: " . $this->tempPath);
         }
     }
 }

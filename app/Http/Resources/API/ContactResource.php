@@ -21,7 +21,7 @@ class ContactResource extends JsonResource
             'last_name' => $this->last_name,
             'phone_number' => $this->phone_number,
             'address' => $this->address,
-            'image_path' => Storage::disk('s3')->url($this->image_path),
+            'image_path' => $this->image_path ? Storage::disk('s3')->url($this->image_path) : null,
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
         ];
     }

@@ -25,7 +25,7 @@ class ContactService
                 $tempPath = $request->file('image')->store('temp', 'local');
 
                 // Queue the image processing job
-                ProcessImageJob::dispatchSync($contact->id, $tempPath);
+                ProcessImageJob::dispatch($contact->id, $tempPath);
             }
 
             DB::commit();
