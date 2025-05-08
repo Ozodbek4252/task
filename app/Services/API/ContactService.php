@@ -96,4 +96,37 @@ class ContactService
             );
         }
     }
+
+    public function destroy(Contact $contact)
+    {
+        DB::beginTransaction();
+
+        try {
+            // Delete the image if it exists
+            if ($contact->image_path) {
+                // Delete the old image with job
+                ImageDeleteJob::dispatch($contact->image_path);
+            }
+
+            $contact->delete();
+
+            DB::commit();
+            return response()->json([
+                'message' => 'Contact deleted successfully',
+            ], 204);
+        } catch (\Exception $e) {
+            Log::error('Failed to delete contact: ' . $e->getMessage(), [
+                'exception' => $e,
+            ]);
+
+            DB::rollBack();
+            return response()->json(
+                [
+                    'message' => 'Failed to delete contact',
+                    'error' => $e->getMessage(),
+                ],
+                is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() <= 599 ? $e->getCode() : 500
+            );
+        }
+    }
 }

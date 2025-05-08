@@ -29,4 +29,9 @@ class ContactController extends Controller
     {
         return $this->service->update($request, $contact);
     }
+
+    public function destroy(Contact $contact)
+    {
+        return $this->service->destroy($contact);
+    }
 }
