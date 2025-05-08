@@ -23,31 +23,15 @@ class ContactService
                 'address',
             ]));
 
-            if ($request->hasFile('image')) {
-                $tempPath = $request->file('image')->store('temp', 'local');
-
-                // Queue the image processing job
-                ProcessImageJob::dispatch($contact->id, $tempPath);
-            }
+            $this->handleImageUpload($request, $contact);
 
             DB::commit();
             return response()->json([
                 'message' => 'Contact created successfully',
             ], 201);
         } catch (\Exception $e) {
-            Log::error('Failed to create contact: ' . $e->getMessage(), [
-                'request' => $request->all(),
-                'exception' => $e,
-            ]);
-
             DB::rollBack();
-            return response()->json(
-                [
-                    'message' => 'Failed to create contact',
-                    'error' => $e->getMessage(),
-                ],
-                is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() <= 599 ? $e->getCode() : 500
-            );
+            return $this->respondWithError($e, $request, 'create');
         }
     }
 
@@ -63,37 +47,19 @@ class ContactService
                 'address',
             ]));
 
-            if ($request->hasFile('image')) {
-                // Delete the old image if it exists
-                if ($contact->image_path) {
-                    // Delete the old image with job
-                    ImageDeleteJob::dispatch($contact->image_path);
-                }
-
-                $tempPath = $request->file('image')->store('temp', 'local');
-
-                // Queue the image processing job
-                ProcessImageJob::dispatch($contact->id, $tempPath);
+            if ($request->hasFile('image') && $contact->image_path) {
+                $this->handleImageDeletion($contact->image_path);
             }
+
+            $this->handleImageUpload($request, $contact);
 
             DB::commit();
             return response()->json([
                 'message' => 'Contact updated successfully',
             ], 202);
         } catch (\Exception $e) {
-            Log::error('Failed to update contact: ' . $e->getMessage(), [
-                'request' => $request->all(),
-                'exception' => $e,
-            ]);
-
             DB::rollBack();
-            return response()->json(
-                [
-                    'message' => 'Failed to update contact',
-                    'error' => $e->getMessage(),
-                ],
-                is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() <= 599 ? $e->getCode() : 500
-            );
+            return $this->respondWithError($e, $request, 'update');
         }
     }
 
@@ -102,10 +68,8 @@ class ContactService
         DB::beginTransaction();
 
         try {
-            // Delete the image if it exists
             if ($contact->image_path) {
-                // Delete the old image with job
-                ImageDeleteJob::dispatch($contact->image_path);
+                $this->handleImageDeletion($contact->image_path);
             }
 
             $contact->delete();
@@ -115,18 +79,40 @@ class ContactService
                 'message' => 'Contact deleted successfully',
             ], 204);
         } catch (\Exception $e) {
-            Log::error('Failed to delete contact: ' . $e->getMessage(), [
-                'exception' => $e,
-            ]);
-
             DB::rollBack();
-            return response()->json(
-                [
-                    'message' => 'Failed to delete contact',
-                    'error' => $e->getMessage(),
-                ],
-                is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() <= 599 ? $e->getCode() : 500
-            );
+            return $this->respondWithError($e, null, 'delete');
         }
+    }
+
+    private function handleImageUpload($request, $contact)
+    {
+        if ($request->hasFile('image')) {
+            $tempPath = $request->file('image')->store('temp', 'local');
+            ProcessImageJob::dispatch($contact->id, $tempPath);
+        }
+    }
+
+    private function handleImageDeletion($imagePath)
+    {
+        ImageDeleteJob::dispatch($imagePath);
+    }
+
+    private function respondWithError(\Exception $e, $request = null, $action = 'operation')
+    {
+        Log::error("Failed to {$action} contact: " . $e->getMessage(), [
+            'request' => $request ? $request->all() : [],
+            'exception' => $e,
+        ]);
+
+        return response()->json([
+            'message' => "Failed to {$action} contact",
+            'error' => $e->getMessage(),
+        ], $this->getStatusCode($e));
+    }
+
+    private function getStatusCode(\Exception $e)
+    {
+        $code = $e->getCode();
+        return (is_int($code) && $code >= 100 && $code <= 599) ? $code : 500;
     }
 }
