@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\API\ContactStoreRequest;
+use App\Http\Requests\API\ContactRequest;
 use App\Http\Resources\API\ContactResource;
 use App\Services\API\ContactService;
 use Illuminate\Http\Request;
@@ -20,8 +20,13 @@ class ContactController extends Controller
         return ContactResource::collection($contacts);
     }
 
-    public function store(ContactStoreRequest $request)
+    public function store(ContactRequest $request)
     {
         return $this->service->store($request);
+    }
+
+    public function update(ContactRequest $request, Contact $contact)
+    {
+        return $this->service->update($request, $contact);
     }
 }
