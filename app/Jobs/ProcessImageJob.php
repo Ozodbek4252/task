@@ -49,16 +49,13 @@ class ProcessImageJob implements ShouldQueue
 
             $contact->update(['image_path' => $imagePath]);
 
-            Storage::disk('local')->delete($this->tempPath);
-
-            $endTime = microtime(true);
-
             $duration = round(microtime(true) - $startTime, 3); // Time in seconds
             Log::info("Image processed for contact #{$contact->id} in {$duration}s");
         } catch (\Exception $e) {
             Log::error("Failed to process image: " . $e->getMessage());
-            $this->cleanUpTempFile();
         }
+
+        $this->cleanUpTempFile();
     }
 
     public function failed(\Throwable $e)
