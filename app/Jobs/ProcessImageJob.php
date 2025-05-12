@@ -20,62 +20,58 @@ class ProcessImageJob implements ShouldQueue
     public $backoff = 10;
     public $timeout = 180;
 
-    protected $tempPath;
-    protected $contactId;
+    protected string $tempPath;
+    protected int $contactId;
 
-    public function __construct($contactId, $tempPath)
+    public function __construct(int $contactId, string $tempPath)
     {
         $this->tempPath = $tempPath;
         $this->contactId = $contactId;
     }
 
-    /**
-     * Execute the job.
-     */
     public function handle(): void
     {
         ini_set('memory_limit', '512M');
 
         try {
-            $startTimeToTestLocking = microtime(true); // Start timer
+            $startTime = microtime(true);
 
-            $contact = Contact::find($this->contactId);
-            if (!$contact) {
-                throw new \Exception('Contact not found');
-            }
+            $contact = Contact::findOrFail($this->contactId);
 
             // Check if image exists in the temp folder
             if (!Storage::disk('local')->exists($this->tempPath)) {
-                throw new \Exception('Image not found in temp folder');
+                throw new \Exception('Image not found at path: ' . $this->tempPath);
             }
 
-            $fullPath = Storage::disk('local')->path($this->tempPath);
+            $localPath = Storage::disk('local')->path($this->tempPath);
 
-            $filename = ImageService::resizeAndUpload($fullPath, $this->contactId);
+            $imagePath = ImageService::resizeAndUpload($localPath, $this->contactId);
 
-            // Update
-            $contact->update(['image_path' => $filename]);
+            $contact->update(['image_path' => $imagePath]);
 
-            // cleanup temp file
             Storage::disk('local')->delete($this->tempPath);
 
-            $endTimeToTestLocking = microtime(true);
+            $endTime = microtime(true);
 
-            $lockWaitTime = $endTimeToTestLocking - $startTimeToTestLocking; // Time in seconds
-            Log::info("Lock wait time: " . $lockWaitTime . " seconds");
+            $duration = round(microtime(true) - $startTime, 3); // Time in seconds
+            Log::info("Image processed for contact #{$contact->id} in {$duration}s");
         } catch (\Exception $e) {
             Log::error("Failed to process image: " . $e->getMessage());
+            $this->cleanUpTempFile();
         }
     }
 
     public function failed(\Throwable $e)
     {
         Log::error("ProcessImageJob failed: " . $e->getMessage());
+        $this->cleanUpTempFile();
+    }
 
-        // Clean up temp file if it still exists
+    private function cleanUpTempFile(): void
+    {
         if (Storage::disk('local')->exists($this->tempPath)) {
             Storage::disk('local')->delete($this->tempPath);
-            Log::info("Temp file deleted after failure: " . $this->tempPath);
+            Log::info("Temp file deleted: " . $this->tempPath);
         }
     }
 }

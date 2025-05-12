@@ -21,16 +21,17 @@ class ImageDeleteJob implements ShouldQueue
         $this->imagePath = $imagePath;
     }
 
-    /**
-     * Execute the job.
-     */
     public function handle(): void
     {
         try {
-            Storage::disk('s3')->delete($this->imagePath);
+            if (Storage::disk('s3')->exists($this->imagePath)) {
+                Storage::disk('s3')->delete($this->imagePath);
+            } else {
+                Log::warning("Image to delete not found on S3: {$this->imagePath}");
+            }
         } catch (\Exception $e) {
             Log::error("Failed to delete image: {$this->imagePath}", [
-                'exception' => $e,
+                'Error' => $e,
             ]);
         }
     }

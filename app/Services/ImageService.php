@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 
 class ImageService
 {
-    public static function resizeAndUpload(string $localPath, int $contactId): ?string
+    public static function resizeAndUpload(string $localPath, int $contactId): string
     {
         $manager = new ImageManager(new Driver());
         $image = $manager->read($localPath);
